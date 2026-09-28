@@ -1,0 +1,1581 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0F1117">
+<title>Code39 Generator</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --bg:        #0F1117;
+    --card:      #1A1D27;
+    --input:     #232635;
+    --accent:    #00C896;
+    --accent2:   #00A87E;
+    --text:      #F0F2F8;
+    --muted:     #8891A8;
+    --border:    #2D3148;
+    --danger:    #FF4F6B;
+    --safe-top:  env(safe-area-inset-top, 0px);
+    --safe-bot:  env(safe-area-inset-bottom, 0px);
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    height: 100dvh;
+    max-width: 480px;
+    margin: 0 auto;
+    position: relative;
+  }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    padding: calc(var(--safe-top) + 14px) 20px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    z-index: 10;
+  }
+  .topbar-icon {
+    width: 34px; height: 34px;
+    background: var(--accent);
+    border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .topbar-icon svg { width: 18px; height: 18px; }
+  .topbar h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
+  .topbar-sub { font-size: 11px; color: var(--accent); font-weight: 600; letter-spacing: 0.5px; margin-top: 1px; }
+
+  /* ── TABS ── */
+  .tabs {
+    display: flex;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .tab {
+    flex: 1;
+    padding: 13px 8px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    position: relative;
+    transition: color 0.15s;
+    letter-spacing: 0.2px;
+  }
+  .tab.active { color: var(--accent); }
+  .tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 20%; right: 20%;
+    height: 2px;
+    background: var(--accent);
+    border-radius: 2px 2px 0 0;
+  }
+  .tab-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px; height: 18px;
+    background: var(--border);
+    color: var(--muted);
+    border-radius: 50%;
+    font-size: 10px;
+    font-weight: 700;
+    margin-left: 5px;
+    vertical-align: middle;
+  }
+  .tab.active .tab-count { background: rgba(0,200,150,0.15); color: var(--accent); }
+
+  /* ── SCREEN ── */
+  .screen {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(var(--safe-bot) + 12px);
+  }
+  .screen.hidden { display: none; }
+
+  /* ── GENERATOR SCREEN ── */
+  .gen-body { padding: 18px 16px; display: flex; flex-direction: column; gap: 14px; }
+
+  .field-group { display: flex; flex-direction: column; gap: 6px; }
+  .field-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.6px;
+    padding-left: 2px;
+  }
+  .field-row {
+    display: flex;
+    background: var(--input);
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: border-color 0.15s;
+  }
+  .field-row:focus-within { border-color: var(--accent); }
+  .field-icon {
+    width: 44px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+  .field-icon svg { width: 16px; height: 16px; }
+  input[type="text"] {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 500;
+    padding: 13px 14px 13px 0;
+    font-family: inherit;
+    caret-color: var(--accent);
+  }
+  input[type="text"]::placeholder { color: var(--muted); font-weight: 400; }
+  .clear-btn {
+    width: 38px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .clear-btn:active { color: var(--danger); }
+
+  .hint { font-size: 11px; color: var(--muted); padding-left: 2px; }
+  .hint.error { color: var(--danger); }
+
+  /* ── GENERATE BUTTON ── */
+  .gen-btn {
+    background: var(--accent);
+    color: #0A1510;
+    border: none;
+    border-radius: 13px;
+    padding: 15px 20px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.12s;
+    letter-spacing: 0.2px;
+    -webkit-appearance: none;
+  }
+  .gen-btn:active { transform: scale(0.97); background: var(--accent2); }
+  .gen-btn svg { width: 17px; height: 17px; }
+
+  /* ── BARCODE CARD ── */
+  .barcode-card {
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .barcode-header {
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+  .barcode-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .barcode-op {
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+  .barcode-value {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+  .bc-actions { display: flex; gap: 6px; }
+  .bc-action-btn {
+    width: 34px; height: 34px;
+    background: var(--input);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    color: var(--muted);
+    transition: all 0.12s;
+  }
+  .bc-action-btn:active { background: rgba(0,200,150,0.15); color: var(--accent); border-color: var(--accent); }
+  .bc-action-btn svg { width: 15px; height: 15px; }
+
+  .barcode-svg-wrap {
+    background: #fff;
+    padding: 20px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .barcode-svg-wrap svg { max-width: 100%; }
+  .barcode-text-label {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    color: #111;
+  }
+
+  .empty-barcode {
+    background: var(--card);
+    border: 1.5px dashed var(--border);
+    border-radius: 16px;
+    padding: 40px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+    text-align: center;
+  }
+  .empty-barcode svg { width: 40px; height: 40px; opacity: 0.3; }
+  .empty-barcode p { font-size: 13px; line-height: 1.5; }
+
+  /* ── HISTORY SCREEN ── */
+  .hist-toolbar {
+    padding: 14px 16px 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 5;
+    border-bottom: 1px solid var(--border);
+  }
+  .search-row {
+    flex: 1;
+    display: flex;
+    background: var(--input);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    align-items: center;
+    overflow: hidden;
+    transition: border-color 0.15s;
+  }
+  .search-row:focus-within { border-color: var(--accent); }
+  .search-row svg { width: 14px; height: 14px; margin-left: 10px; color: var(--muted); flex-shrink: 0; }
+  .search-row input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-size: 13px;
+    padding: 9px 10px;
+    font-family: inherit;
+    caret-color: var(--accent);
+  }
+  .search-row input::placeholder { color: var(--muted); }
+
+  .sort-btn {
+    background: var(--input);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 11px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+    transition: all 0.12s;
+    font-family: inherit;
+  }
+  .sort-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,200,150,0.08); }
+  .sort-btn svg { width: 12px; height: 12px; }
+
+  .hist-list { padding: 10px 16px; display: flex; flex-direction: column; gap: 8px; }
+
+  .hist-item {
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: 13px;
+    padding: 13px 14px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    cursor: pointer;
+    transition: border-color 0.12s;
+    position: relative;
+    overflow: hidden;
+  }
+  .hist-item:active { border-color: var(--accent); }
+  .hist-mini-bc {
+    width: 54px;
+    height: 38px;
+    background: #fff;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .hist-mini-bc svg { width: 48px; height: 30px; }
+  .hist-info { flex: 1; min-width: 0; }
+  .hist-op {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.3px;
+    margin-bottom: 2px;
+  }
+  .hist-code {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .hist-date {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 3px;
+  }
+  .hist-del {
+    width: 30px; height: 30px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted);
+    border-radius: 8px;
+    flex-shrink: 0;
+    transition: all 0.12s;
+    cursor: pointer;
+  }
+  .hist-del:active { background: rgba(255,79,107,0.15); color: var(--danger); }
+  .hist-del svg { width: 15px; height: 15px; }
+
+  .hist-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 60px 30px;
+    color: var(--muted);
+    text-align: center;
+  }
+  .hist-empty svg { width: 48px; height: 48px; opacity: 0.2; }
+  .hist-empty h3 { font-size: 15px; font-weight: 600; }
+  .hist-empty p { font-size: 13px; line-height: 1.5; opacity: 0.7; }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    display: flex;
+    align-items: flex-end;
+    padding: 0;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal-sheet {
+    background: var(--card);
+    border-radius: 20px 20px 0 0;
+    width: 100%;
+    padding: 20px 16px calc(var(--safe-bot) + 24px);
+    transform: translateY(100%);
+    transition: transform 0.25s cubic-bezier(0.22,1,0.36,1);
+    max-height: 90dvh;
+    overflow-y: auto;
+  }
+  .modal-overlay.open .modal-sheet { transform: translateY(0); }
+  .modal-handle {
+    width: 36px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 0 auto 18px;
+  }
+  .modal-op {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.4px;
+    margin-bottom: 4px;
+  }
+  .modal-code {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    margin-bottom: 16px;
+  }
+  .modal-bc {
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px 16px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .modal-bc svg { width: 100%; max-width: 320px; }
+  .modal-bc-text {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 3.5px;
+    color: #111;
+  }
+  .modal-date {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .modal-date svg { width: 13px; height: 13px; }
+  .modal-actions { display: flex; gap: 8px; }
+  .modal-use-btn {
+    flex: 1;
+    background: var(--accent);
+    color: #0A1510;
+    border: none;
+    border-radius: 12px;
+    padding: 13px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.12s;
+  }
+  .modal-use-btn:active { background: var(--accent2); }
+  .modal-del-btn {
+    background: rgba(255,79,107,0.1);
+    color: var(--danger);
+    border: 1.5px solid rgba(255,79,107,0.3);
+    border-radius: 12px;
+    padding: 13px 16px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.12s;
+  }
+  .modal-del-btn:active { background: rgba(255,79,107,0.2); }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed;
+    bottom: calc(var(--safe-bot) + 20px);
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--accent);
+    color: #0A1510;
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    z-index: 200;
+    transition: transform 0.25s cubic-bezier(0.22,1,0.36,1);
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* ── SCROLLBAR ── */
+  .screen::-webkit-scrollbar { width: 3px; }
+  .screen::-webkit-scrollbar-track { background: transparent; }
+  .screen::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ── SCANNER SCREEN ── */
+  .scan-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+
+  .scan-viewfinder {
+    position: relative;
+    background: #000;
+    border-radius: 16px;
+    overflow: hidden;
+    aspect-ratio: 4/3;
+    border: 1.5px solid var(--border);
+  }
+  #scan-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .scan-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .scan-frame {
+    width: 72%;
+    height: 38%;
+    position: relative;
+  }
+  .scan-frame::before, .scan-frame::after,
+  .scan-frame-inner::before, .scan-frame-inner::after {
+    content: '';
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    border-color: var(--accent);
+    border-style: solid;
+  }
+  .scan-frame::before  { top: 0;    left: 0;  border-width: 3px 0 0 3px; border-radius: 3px 0 0 0; }
+  .scan-frame::after   { top: 0;    right: 0; border-width: 3px 3px 0 0; border-radius: 0 3px 0 0; }
+  .scan-frame-inner::before { bottom: 0; left: 0;  border-width: 0 0 3px 3px; border-radius: 0 0 0 3px; }
+  .scan-frame-inner::after  { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-radius: 0 0 3px 0; }
+  .scan-line {
+    position: absolute;
+    left: 6px; right: 6px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    border-radius: 1px;
+    animation: scanline 2s ease-in-out infinite;
+    box-shadow: 0 0 8px var(--accent);
+  }
+  @keyframes scanline {
+    0%   { top: 8%; opacity: 0; }
+    10%  { opacity: 1; }
+    90%  { opacity: 1; }
+    100% { top: 88%; opacity: 0; }
+  }
+  .scan-hint-overlay {
+    position: absolute;
+    bottom: 10px;
+    left: 0; right: 0;
+    text-align: center;
+    font-size: 12px;
+    color: rgba(255,255,255,0.8);
+    font-weight: 500;
+    letter-spacing: 0.2px;
+  }
+
+  .scan-idle {
+    position: absolute;
+    inset: 0;
+    background: var(--input);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--muted);
+  }
+  .scan-idle svg { width: 48px; height: 48px; opacity: 0.35; }
+  .scan-idle p { font-size: 13px; text-align: center; line-height: 1.5; padding: 0 24px; }
+
+  .scan-start-btn {
+    background: var(--accent);
+    color: #0A1510;
+    border: none;
+    border-radius: 13px;
+    padding: 15px 20px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    font-family: inherit;
+    transition: all 0.12s;
+    -webkit-appearance: none;
+  }
+  .scan-start-btn:active { transform: scale(0.97); background: var(--accent2); }
+  .scan-start-btn.stop { background: rgba(255,79,107,0.15); color: var(--danger); border: 1.5px solid rgba(255,79,107,0.35); }
+  .scan-start-btn svg { width: 17px; height: 17px; }
+
+  .scan-result-card {
+    background: var(--card);
+    border: 1.5px solid var(--accent);
+    border-radius: 14px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    animation: resultPop 0.2s cubic-bezier(0.22,1,0.36,1);
+  }
+  @keyframes resultPop {
+    from { transform: scale(0.96); opacity: 0; }
+    to   { transform: scale(1);    opacity: 1; }
+  }
+  .scan-result-label { font-size: 10px; font-weight: 700; color: var(--accent); letter-spacing: 0.6px; }
+  .scan-result-code  { font-size: 20px; font-weight: 800; letter-spacing: 1.5px; }
+  .scan-result-actions { display: flex; gap: 8px; margin-top: 4px; }
+  .scan-use-btn {
+    flex: 1;
+    background: var(--accent);
+    color: #0A1510;
+    border: none;
+    border-radius: 10px;
+    padding: 11px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.12s;
+  }
+  .scan-use-btn:active { background: var(--accent2); }
+  .scan-again-btn {
+    background: var(--input);
+    color: var(--text);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 11px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.12s;
+  }
+  .scan-again-btn:active { border-color: var(--accent); }
+
+  .camera-perm-error {
+    background: rgba(255,79,107,0.08);
+    border: 1.5px solid rgba(255,79,107,0.3);
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 13px;
+    color: var(--danger);
+    line-height: 1.5;
+    text-align: center;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #F4F5F9;
+      --card: #FFFFFF;
+      --input: #ECEEF5;
+      --text: #111827;
+      --muted: #6B7280;
+      --border: #DDE1EF;
+    }
+    body { background: var(--bg); }
+    .topbar { background: var(--bg); }
+    .hist-toolbar { background: var(--bg); }
+    .tabs { background: var(--bg); }
+    .barcode-svg-wrap { background: #f8f8f8; }
+    .modal-sheet { background: #FFFFFF; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#0A1510" stroke-width="2.5" stroke-linecap="round">
+        <rect x="2" y="4" width="3" height="16" rx="0.5"/>
+        <rect x="7" y="4" width="1.5" height="16" rx="0.5"/>
+        <rect x="10.5" y="4" width="3" height="16" rx="0.5"/>
+        <rect x="15.5" y="4" width="1.5" height="16" rx="0.5"/>
+        <rect x="19" y="4" width="3" height="16" rx="0.5"/>
+      </svg>
+    </div>
+    <div>
+      <div class="topbar h1" style="font-size:17px;font-weight:700;letter-spacing:-0.3px;">Code39 Generator</div>
+      <div class="topbar-sub">GENERATOR KODÓW KRESKOWYCH</div>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <div class="tab active" id="tab-gen" onclick="switchTab('gen')">
+      Generuj
+    </div>
+    <div class="tab" id="tab-scan" onclick="switchTab('scan')">
+      Skaner
+    </div>
+    <div class="tab" id="tab-hist" onclick="switchTab('hist')">
+      Historia <span class="tab-count" id="hist-count">0</span>
+    </div>
+  </div>
+
+  <!-- GENERATOR SCREEN -->
+  <div class="screen" id="screen-gen">
+    <div class="gen-body">
+
+      <!-- OPERATOR FIELD -->
+      <div class="field-group">
+        <div class="field-label">ID OPERATORA</div>
+        <div class="field-row">
+          <div class="field-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          </div>
+          <input type="text" id="input-operator" placeholder="np. JAN-KOWALSKI" maxlength="40"
+            oninput="onInput()" autocomplete="off" autocapitalize="characters" spellcheck="false">
+          <div class="clear-btn" onclick="clearField('input-operator')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </div>
+        </div>
+        <div class="hint">Nazwa/ID przypisana do kodu (opcjonalna)</div>
+      </div>
+
+      <!-- CODE FIELD -->
+      <div class="field-group">
+        <div class="field-label">KOD DO ZAKODOWANIA</div>
+        <div class="field-row">
+          <div class="field-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <rect x="2" y="4" width="2" height="16"/><rect x="6" y="4" width="1" height="16"/>
+              <rect x="9" y="4" width="2" height="16"/><rect x="13" y="4" width="1" height="16"/>
+              <rect x="16" y="4" width="2" height="16"/><rect x="20" y="4" width="2" height="16"/>
+            </svg>
+          </div>
+          <input type="text" id="input-code" placeholder="np. 12345-ABC" maxlength="50"
+            oninput="onInput()" autocomplete="off" autocapitalize="characters" spellcheck="false">
+          <div class="clear-btn" onclick="clearField('input-code')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </div>
+        </div>
+        <div class="hint" id="code-hint">Dozwolone: A-Z, 0-9, spacja, - . $ / + %</div>
+      </div>
+
+      <!-- GENERATE BUTTON -->
+      <button class="gen-btn" onclick="generateBarcode()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+        </svg>
+        Generuj kod kreskowy
+      </button>
+
+      <!-- BARCODE OUTPUT -->
+      <div id="barcode-output"></div>
+
+    </div>
+  </div>
+
+  <!-- SCANNER SCREEN -->
+  <div class="screen hidden" id="screen-scan">
+    <div class="scan-body">
+
+      <!-- VIEWFINDER -->
+      <div class="scan-viewfinder" id="scan-viewfinder">
+        <video id="scan-video" playsinline muted></video>
+        <div class="scan-overlay" id="scan-overlay" style="display:none">
+          <div class="scan-frame">
+            <div class="scan-frame-inner"></div>
+            <div class="scan-line"></div>
+          </div>
+        </div>
+        <div class="scan-hint-overlay" id="scan-hint" style="display:none">Nakieruj na kod kreskowy</div>
+        <div class="scan-idle" id="scan-idle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+          <p>Naciśnij przycisk poniżej,<br>aby włączyć kamerę i skanować</p>
+        </div>
+      </div>
+
+      <!-- OPERATOR FOR SCAN -->
+      <div class="field-group">
+        <div class="field-label">ID OPERATORA (opcjonalny)</div>
+        <div class="field-row">
+          <div class="field-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          </div>
+          <input type="text" id="scan-operator" placeholder="np. JAN-KOWALSKI" maxlength="40"
+            autocomplete="off" autocapitalize="characters" spellcheck="false"
+            oninput="this.value=this.value.toUpperCase()">
+          <div class="clear-btn" onclick="clearField('scan-operator')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- START/STOP BUTTON -->
+      <button class="scan-start-btn" id="scan-toggle-btn" onclick="toggleScanner()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" id="scan-btn-icon">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+          <circle cx="12" cy="13" r="4"/>
+        </svg>
+        <span id="scan-btn-label">Włącz kamerę</span>
+      </button>
+
+      <!-- ERROR -->
+      <div class="camera-perm-error" id="scan-error" style="display:none"></div>
+
+      <!-- RESULT -->
+      <div id="scan-result-area"></div>
+
+    </div>
+  </div>
+
+  <!-- HISTORY SCREEN -->
+  <div class="screen hidden" id="screen-hist">
+    <div class="hist-toolbar">
+      <div class="search-row">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input type="text" id="search-input" placeholder="Szukaj kodu lub operatora..." oninput="renderHistory()">
+      </div>
+      <button class="sort-btn" id="sort-btn" onclick="toggleSort()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="9" y2="18"/>
+        </svg>
+        <span id="sort-label">Data</span>
+      </button>
+    </div>
+    <div class="hist-list" id="hist-list"></div>
+  </div>
+
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal" onclick="closeModal(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-op" id="modal-op"></div>
+    <div class="modal-code" id="modal-code"></div>
+    <div class="modal-bc" id="modal-bc"></div>
+    <div class="modal-date" id="modal-date">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+        <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <span id="modal-date-text"></span>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-use-btn" onclick="loadToGenerator()">Użyj w generatorze</button>
+      <button class="modal-del-btn" onclick="deleteFromModal()">Usuń</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  CODE 39 ENCODING
+// ═══════════════════════════════════════════════════
+
+const CODE39 = {
+  '0':'NNNWWNWNN','1':'WNNWNNNNW','2':'NNWWNNNNW','3':'WNWWNNNNN',
+  '4':'NNNWWNNNW','5':'WNNWWNNNN','6':'NNWWWNNNN','7':'NNNWNNWNW',
+  '8':'WNNWNNWNN','9':'NNWWNNWNN','A':'WNNNNWNNW','B':'NNWNNWNNW',
+  'C':'WNWNNWNNN','D':'NNNWNWNNW','E':'WNNWNWNNN','F':'NNWWNWNNN',
+  'G':'NNNNNWWNW','H':'WNNNNWWNN','I':'NNWNNWWNN','J':'NNNWNWWNN',
+  'K':'WNNNNNNWW','L':'NNWNNNNWW','M':'WNWNNNNWN','N':'NNNWNNNNW',
+  'O':'WNNWNNNNW','P':'NNWWNNNNW','Q':'NNNNNWNNW','R':'WNNNNWNNW',
+  'S':'NNWNNWNNN','T':'NNNWNWNNN','U':'WWNNNNNNW','V':'NWWNNNNNW',
+  'W':'WWWNNNNNN','X':'NWNNWNNNW','Y':'WWNNWNNNN','Z':'NWWNNWNNN',
+  '-':'NWNNNNWNW','.':'WWNNNWNNN',' ':'NWNNWNWNN','$':'NWNWNWNNN',
+  '/':'NWNWNNWNN','+':'NWNNNWNWN','%':'NNNWNWNWN','*':'NWNNWNWNN'
+};
+
+const VALID = new Set(Object.keys(CODE39).filter(k => k !== '*'));
+
+function isValid(str) {
+  return [...str.toUpperCase()].every(c => VALID.has(c));
+}
+
+function buildBarcodeSVG(text, width = 300, height = 80) {
+  const full = '*' + text.toUpperCase() + '*';
+  const N = 1, W = 2.5, GAP = 1;
+
+  // Calculate total width in units
+  let total = 0;
+  for (let i = 0; i < full.length; i++) {
+    const pat = CODE39[full[i]];
+    if (!pat) return null;
+    for (const c of pat) total += c === 'W' ? W : N;
+    if (i < full.length - 1) total += GAP;
+  }
+
+  const scale = (width - 8) / total;
+  const barH = height;
+  let x = 4;
+  let rects = '';
+
+  for (let i = 0; i < full.length; i++) {
+    const pat = CODE39[full[i]];
+    for (let e = 0; e < pat.length; e++) {
+      const w = (pat[e] === 'W' ? W : N) * scale;
+      if (e % 2 === 0) { // black bars at even positions
+        rects += `<rect x="${x.toFixed(2)}" y="0" width="${w.toFixed(2)}" height="${barH}" fill="#000"/>`;
+      }
+      x += w;
+    }
+    if (i < full.length - 1) x += GAP * scale;
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${barH}" viewBox="0 0 ${width} ${barH}">${rects}</svg>`;
+}
+
+function buildMiniSVG(text) {
+  const full = '*' + text.toUpperCase() + '*';
+  const N = 1, W = 2.5, GAP = 0.8;
+  let total = 0;
+  for (let i = 0; i < full.length; i++) {
+    const pat = CODE39[full[i]];
+    if (!pat) return '';
+    for (const c of pat) total += c === 'W' ? W : N;
+    if (i < full.length - 1) total += GAP;
+  }
+  const W_px = 48, H_px = 28;
+  const scale = W_px / total;
+  let x = 0, rects = '';
+  for (let i = 0; i < full.length; i++) {
+    const pat = CODE39[full[i]];
+    for (let e = 0; e < pat.length; e++) {
+      const w = (pat[e] === 'W' ? W : N) * scale;
+      if (e % 2 === 0) rects += `<rect x="${x.toFixed(2)}" y="0" width="${w.toFixed(2)}" height="${H_px}" fill="#111"/>`;
+      x += w;
+    }
+    if (i < full.length - 1) x += GAP * scale;
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W_px}" height="${H_px}" viewBox="0 0 ${W_px} ${H_px}">${rects}</svg>`;
+}
+
+// ═══════════════════════════════════════════════════
+//  STATE & STORAGE
+// ═══════════════════════════════════════════════════
+
+let history = JSON.parse(localStorage.getItem('code39_history') || '[]');
+let sortMode = localStorage.getItem('code39_sort') || 'date'; // 'date' | 'alpha'
+let currentTab = 'gen';
+let modalItem = null;
+let currentBarcode = null;
+
+function saveHistory() {
+  localStorage.setItem('code39_history', JSON.stringify(history));
+  localStorage.setItem('code39_sort', sortMode);
+  document.getElementById('hist-count').textContent = history.length;
+}
+
+// ═══════════════════════════════════════════════════
+//  UI HELPERS
+// ═══════════════════════════════════════════════════
+
+function switchTab(tab) {
+  // Stop scanner when leaving scan tab
+  if (currentTab === 'scan' && tab !== 'scan') stopScanner();
+
+  currentTab = tab;
+  document.getElementById('tab-gen').classList.toggle('active', tab === 'gen');
+  document.getElementById('tab-scan').classList.toggle('active', tab === 'scan');
+  document.getElementById('tab-hist').classList.toggle('active', tab === 'hist');
+  document.getElementById('screen-gen').classList.toggle('hidden', tab !== 'gen');
+  document.getElementById('screen-scan').classList.toggle('hidden', tab !== 'scan');
+  document.getElementById('screen-hist').classList.toggle('hidden', tab !== 'hist');
+  if (tab === 'hist') renderHistory();
+}
+
+function clearField(id) {
+  document.getElementById(id).value = '';
+  onInput();
+  document.getElementById(id).focus();
+}
+
+function showToast(msg, duration = 1800) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), duration);
+}
+
+// ═══════════════════════════════════════════════════
+//  GENERATOR
+// ═══════════════════════════════════════════════════
+
+function onInput() {
+  const code = document.getElementById('input-code').value.toUpperCase();
+  const hint = document.getElementById('code-hint');
+  document.getElementById('input-code').value = code;
+  document.getElementById('input-operator').value =
+    document.getElementById('input-operator').value.toUpperCase();
+
+  if (code && !isValid(code)) {
+    const bad = [...code].filter(c => !VALID.has(c));
+    hint.textContent = `Niedozwolony znak: "${[...new Set(bad)].join(', ')}"`;
+    hint.className = 'hint error';
+  } else {
+    hint.textContent = 'Dozwolone: A-Z, 0-9, spacja, - . $ / + %';
+    hint.className = 'hint';
+  }
+}
+
+function generateBarcode() {
+  const code = document.getElementById('input-code').value.trim().toUpperCase();
+  const operator = document.getElementById('input-operator').value.trim().toUpperCase();
+
+  if (!code) { showToast('Wpisz kod do zakodowania'); return; }
+  if (!isValid(code)) { showToast('Kod zawiera niedozwolone znaki'); return; }
+
+  const svg = buildBarcodeSVG(code, 320, 90);
+  if (!svg) { showToast('Błąd generowania kodu'); return; }
+
+  currentBarcode = { code, operator, svg, ts: Date.now() };
+
+  document.getElementById('barcode-output').innerHTML = `
+    <div class="barcode-card">
+      <div class="barcode-header">
+        <div class="barcode-label">
+          ${operator ? `<div class="barcode-op">${escHtml(operator)}</div>` : ''}
+          <div class="barcode-value">${escHtml(code)}</div>
+        </div>
+        <div class="bc-actions">
+          <div class="bc-action-btn" onclick="saveCurrentToHistory()" title="Zapisz">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+              <polyline points="17 21 17 13 7 13 7 21"/>
+              <polyline points="7 3 7 8 15 8"/>
+            </svg>
+          </div>
+          <div class="bc-action-btn" onclick="copyBarcodeText()" title="Kopiuj">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+      <div class="barcode-svg-wrap">
+        ${svg}
+        <div class="barcode-text-label">${escHtml(code)}</div>
+      </div>
+    </div>
+  `;
+
+  // Auto-save to history
+  saveCurrentToHistory(true);
+}
+
+function saveCurrentToHistory(silent = false) {
+  if (!currentBarcode) return;
+  const { code, operator, ts } = currentBarcode;
+
+  // Check duplicate (same code + operator in last 60s)
+  const dup = history.find(h =>
+    h.code === code && h.operator === operator && (ts - h.ts) < 60000
+  );
+  if (dup) {
+    if (!silent) showToast('Już zapisane w historii');
+    return;
+  }
+
+  history.unshift({ id: Date.now(), code, operator, ts });
+  saveHistory();
+  if (!silent) showToast('✓ Zapisano w historii');
+}
+
+function copyBarcodeText() {
+  if (!currentBarcode) return;
+  navigator.clipboard?.writeText(currentBarcode.code)
+    .then(() => showToast('✓ Skopiowano do schowka'))
+    .catch(() => showToast('Nie można skopiować'));
+}
+
+// ═══════════════════════════════════════════════════
+//  HISTORY
+// ═══════════════════════════════════════════════════
+
+function toggleSort() {
+  sortMode = sortMode === 'date' ? 'alpha' : 'date';
+  document.getElementById('sort-label').textContent = sortMode === 'date' ? 'Data' : 'A-Z';
+  document.getElementById('sort-btn').classList.toggle('active', sortMode === 'alpha');
+  saveHistory();
+  renderHistory();
+}
+
+function getSorted(items) {
+  const q = document.getElementById('search-input')?.value.toLowerCase() || '';
+  let filtered = q
+    ? items.filter(h =>
+        h.code.toLowerCase().includes(q) ||
+        (h.operator || '').toLowerCase().includes(q)
+      )
+    : items;
+
+  if (sortMode === 'alpha') {
+    return [...filtered].sort((a, b) => a.code.localeCompare(b.code));
+  }
+  return [...filtered].sort((a, b) => b.ts - a.ts);
+}
+
+function formatDate(ts) {
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()}  ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function renderHistory() {
+  const sorted = getSorted(history);
+  const list = document.getElementById('hist-list');
+  document.getElementById('hist-count').textContent = history.length;
+
+  if (history.length === 0) {
+    list.innerHTML = `
+      <div class="hist-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <rect x="2" y="4" width="3" height="16" rx="0.5"/>
+          <rect x="7" y="4" width="1.5" height="16" rx="0.5"/>
+          <rect x="10.5" y="4" width="3" height="16" rx="0.5"/>
+          <rect x="15.5" y="4" width="1.5" height="16" rx="0.5"/>
+          <rect x="19" y="4" width="3" height="16" rx="0.5"/>
+        </svg>
+        <h3>Brak zapisanych kodów</h3>
+        <p>Wygenerowane kody będą tu zapisywane automatycznie.</p>
+      </div>`;
+    return;
+  }
+
+  if (sorted.length === 0) {
+    list.innerHTML = `
+      <div class="hist-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <h3>Brak wyników</h3>
+        <p>Nie znaleziono kodów pasujących do wyszukiwanej frazy.</p>
+      </div>`;
+    return;
+  }
+
+  list.innerHTML = sorted.map(item => `
+    <div class="hist-item" onclick="openModal(${item.id})">
+      <div class="hist-mini-bc">${buildMiniSVG(item.code)}</div>
+      <div class="hist-info">
+        ${item.operator ? `<div class="hist-op">${escHtml(item.operator)}</div>` : ''}
+        <div class="hist-code">${escHtml(item.code)}</div>
+        <div class="hist-date">${formatDate(item.ts)}</div>
+      </div>
+      <div class="hist-del" onclick="event.stopPropagation(); deleteItem(${item.id})">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6l-1 14H6L5 6"/>
+          <path d="M10 11v6"/><path d="M14 11v6"/>
+          <path d="M9 6V4h6v2"/>
+        </svg>
+      </div>
+    </div>
+  `).join('');
+}
+
+function deleteItem(id) {
+  history = history.filter(h => h.id !== id);
+  saveHistory();
+  renderHistory();
+  showToast('Usunięto');
+}
+
+// ═══════════════════════════════════════════════════
+//  MODAL
+// ═══════════════════════════════════════════════════
+
+function openModal(id) {
+  modalItem = history.find(h => h.id === id);
+  if (!modalItem) return;
+
+  document.getElementById('modal-op').textContent = modalItem.operator || '';
+  document.getElementById('modal-code').textContent = modalItem.code;
+  document.getElementById('modal-date-text').textContent = formatDate(modalItem.ts);
+
+  const svg = buildBarcodeSVG(modalItem.code, 320, 100);
+  document.getElementById('modal-bc').innerHTML = `
+    ${svg || ''}
+    <div class="modal-bc-text">${escHtml(modalItem.code)}</div>
+  `;
+
+  document.getElementById('modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeModal(e) {
+  if (e && e.target !== document.getElementById('modal')) return;
+  document.getElementById('modal').classList.remove('open');
+  document.body.style.overflow = '';
+  modalItem = null;
+}
+
+function loadToGenerator() {
+  if (!modalItem) return;
+  document.getElementById('input-code').value = modalItem.code;
+  document.getElementById('input-operator').value = modalItem.operator || '';
+  document.getElementById('modal').classList.remove('open');
+  document.body.style.overflow = '';
+  switchTab('gen');
+  generateBarcode();
+  modalItem = null;
+}
+
+function deleteFromModal() {
+  if (!modalItem) return;
+  deleteItem(modalItem.id);
+  document.getElementById('modal').classList.remove('open');
+  document.body.style.overflow = '';
+  modalItem = null;
+}
+
+// ═══════════════════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════════════════
+
+function escHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ═══════════════════════════════════════════════════
+//  SCANNER — zero external dependencies
+//  Strategy 1: BarcodeDetector API (Chrome Android 84+, native, fast)
+//  Strategy 2: Canvas pixel-row Code39 decoder (pure JS fallback)
+// ═══════════════════════════════════════════════════
+
+let scannerActive = false;
+let scanStream    = null;
+let scanRafId     = null;
+let lastScanned   = null;
+let scanCooldown  = false;
+let barcodeDetector = null;
+
+// ── pick decode strategy once ──
+function getDecodeStrategy() {
+  if (typeof BarcodeDetector !== 'undefined') {
+    try {
+      barcodeDetector = new BarcodeDetector({ formats: ['code_39'] });
+      return 'native';
+    } catch(e) {}
+  }
+  return 'canvas';
+}
+const DECODE_STRATEGY = getDecodeStrategy();
+
+// ── canvas-based Code39 pixel decoder ──
+const C39_CHARS = {
+  'NNNWWNWNN':'0','WNNWNNNNW':'1','NNWWNNNNW':'2','WNWWNNNNN':'3',
+  'NNNWWNNNW':'4','WNNWWNNNN':'5','NNWWWNNNN':'6','NNNWNNWNW':'7',
+  'WNNWNNWNN':'8','NNWWNNWNN':'9','WNNNNWNNW':'A','NNWNNWNNW':'B',
+  'WNWNNWNNN':'C','NNNWNWNNW':'D','WNNWNWNNN':'E','NNWWNWNNN':'F',
+  'NNNNNWWNW':'G','WNNNNWWNN':'H','NNWNNWWNN':'I','NNNWNWWNN':'J',
+  'WNNNNNNWW':'K','NNWNNNNWW':'L','WNWNNNNWN':'M','NNNWNNNNW':'N',
+  'WNNWNNNNW':'O','NNWWNNNNW':'P','NNNNNWNNW':'Q','WNNNNWNNW':'R',
+  'NNWNNWNNN':'S','NNNWNWNNN':'T','WWNNNNNNW':'U','NWWNNNNNW':'V',
+  'WWWNNNNNN':'W','NWNNWNNNW':'X','WWNNWNNNN':'Y','NWWNNWNNN':'Z',
+  'NWNNNNWNW':'-','WWNNNWNNN':'.','NWNNWNWNN':' ','NWNWNWNNN':'$',
+  'NWNWNNWNN':'/','NWNNNWNWN':'+','NNNWNWNWN':'%','NWNNWNWNN':'*'
+};
+
+const SCAN_CANVAS = document.createElement('canvas');
+const SCAN_CTX    = SCAN_CANVAS.getContext('2d', { willReadFrequently: true });
+
+function decodeCode39FromPixels(pixels, w) {
+  // Convert row to binary (dark=1, light=0) with threshold
+  const threshold = 128;
+  const bits = new Uint8Array(w);
+  for (let x = 0; x < w; x++) bits[x] = pixels[x * 4] < threshold ? 1 : 0;
+
+  // Find runs of same value
+  const runs = [];
+  let cur = bits[0], count = 1;
+  for (let x = 1; x < w; x++) {
+    if (bits[x] === cur) { count++; }
+    else { runs.push({ v: cur, n: count }); cur = bits[x]; count = 1; }
+  }
+  runs.push({ v: cur, n: count });
+
+  // Only keep runs that start/end in dark (bars start with dark)
+  // Narrow/Wide classification: find median run length → threshold at 1.8×
+  if (runs.length < 20) return null;
+
+  const lens = runs.map(r => r.n).sort((a,b) => a-b);
+  const med  = lens[Math.floor(lens.length / 2)];
+  const thresh = med * 1.8;
+
+  // Classify each run as N(arrow) or W(ide)
+  const classified = runs.map(r => r.n < thresh ? 'N' : 'W');
+
+  // Slide a 9-element window (each Code39 char = 9 elements)
+  // with 1-element inter-char gap
+  let result = '';
+  let i = 0;
+  // skip leading light runs
+  while (i < classified.length && runs[i].v === 0) i++;
+
+  while (i + 8 < classified.length) {
+    // must start on a dark run
+    if (runs[i].v !== 1) { i++; continue; }
+    const key = classified.slice(i, i+9).join('');
+    const ch  = C39_CHARS[key];
+    if (ch) {
+      result += ch;
+      i += 10; // 9 elements + 1 gap
+    } else {
+      i++;
+    }
+  }
+
+  // Valid Code39 result starts and ends with *
+  if (result.length >= 3 && result[0] === '*' && result[result.length-1] === '*') {
+    return result.slice(1, -1);
+  }
+  return null;
+}
+
+function decodeFrameCanvas(video) {
+  const w = video.videoWidth, h = video.videoHeight;
+  if (!w || !h) return null;
+  SCAN_CANVAS.width = w; SCAN_CANVAS.height = h;
+  SCAN_CTX.drawImage(video, 0, 0, w, h);
+
+  // Sample multiple horizontal rows through the centre region
+  const rows = [0.35, 0.42, 0.50, 0.58, 0.65];
+  for (const frac of rows) {
+    const y = Math.floor(h * frac);
+    const data = SCAN_CTX.getImageData(0, y, w, 1).data;
+    const result = decodeCode39FromPixels(data, w);
+    if (result) return result;
+  }
+  return null;
+}
+
+async function decodeFrameNative(video) {
+  try {
+    const results = await barcodeDetector.detect(video);
+    if (results.length > 0) return results[0].rawValue;
+  } catch(e) {}
+  return null;
+}
+
+// ── scanner lifecycle ──
+async function toggleScanner() {
+  scannerActive ? stopScanner() : await startScanner();
+}
+
+async function startScanner() {
+  const errEl = document.getElementById('scan-error');
+  errEl.style.display = 'none';
+  document.getElementById('scan-result-area').innerHTML = '';
+  lastScanned = null;
+  scanCooldown = false;
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    errEl.textContent = 'Twoja przeglądarka nie obsługuje dostępu do kamery. Użyj Chrome na Androidzie.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  try {
+    scanStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+    });
+  } catch (e) {
+    errEl.textContent =
+      e.name === 'NotAllowedError' ? 'Dostęp do kamery zablokowany. Kliknij ikonę kłódki w pasku adresu i zezwól na kamerę, a następnie odśwież stronę.' :
+      e.name === 'NotFoundError'   ? 'Nie znaleziono kamery w tym urządzeniu.' :
+      `Błąd kamery: ${e.message}`;
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const video = document.getElementById('scan-video');
+  video.srcObject = scanStream;
+  await video.play().catch(() => {});
+
+  document.getElementById('scan-idle').style.display = 'none';
+  document.getElementById('scan-overlay').style.display = 'flex';
+  document.getElementById('scan-hint').style.display = 'block';
+
+  scannerActive = true;
+  setScanBtnStop(true);
+
+  // decode loop
+  let lastAttempt = 0;
+  const INTERVAL = DECODE_STRATEGY === 'native' ? 300 : 150;
+
+  function loop(ts) {
+    if (!scannerActive) return;
+    scanRafId = requestAnimationFrame(loop);
+    if (ts - lastAttempt < INTERVAL) return;
+    lastAttempt = ts;
+    if (scanCooldown || video.readyState < 2) return;
+
+    if (DECODE_STRATEGY === 'native') {
+      decodeFrameNative(video).then(r => { if (r && !scanCooldown) onScanSuccess(r); });
+    } else {
+      const r = decodeFrameCanvas(video);
+      if (r && !scanCooldown) onScanSuccess(r);
+    }
+  }
+  scanRafId = requestAnimationFrame(loop);
+}
+
+function stopScanner() {
+  scannerActive = false;
+  if (scanRafId) { cancelAnimationFrame(scanRafId); scanRafId = null; }
+  if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
+  const video = document.getElementById('scan-video');
+  video.srcObject = null;
+
+  document.getElementById('scan-idle').style.display = 'flex';
+  document.getElementById('scan-overlay').style.display = 'none';
+  document.getElementById('scan-hint').style.display = 'none';
+  setScanBtnStop(false);
+}
+
+function setScanBtnStop(isStop) {
+  const btn = document.getElementById('scan-toggle-btn');
+  btn.classList.toggle('stop', isStop);
+  document.getElementById('scan-btn-label').textContent = isStop ? 'Zatrzymaj kamerę' : 'Włącz kamerę';
+  document.getElementById('scan-btn-icon').innerHTML = isStop
+    ? `<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>`
+    : `<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>`;
+}
+
+// ── on successful scan ──
+function onScanSuccess(code) {
+  if (navigator.vibrate) navigator.vibrate([40, 30, 40]);
+  scanCooldown = true;
+  setTimeout(() => { scanCooldown = false; }, 2500);
+
+  const operator = document.getElementById('scan-operator').value.trim().toUpperCase();
+  const ts = Date.now();
+  const entry = { id: ts, code, operator, ts, scanned: true };
+  history.unshift(entry);
+  saveHistory();
+  lastScanned = entry;
+
+  const svg = buildBarcodeSVG(code, 280, 70);
+  document.getElementById('scan-result-area').innerHTML = `
+    <div class="scan-result-card">
+      <div class="scan-result-label">✓ ZESKANOWANO</div>
+      ${operator ? `<div style="font-size:11px;font-weight:600;color:var(--accent);margin-top:-2px">${escHtml(operator)}</div>` : ''}
+      <div class="scan-result-code">${escHtml(code)}</div>
+      ${svg ? `<div style="background:#fff;border-radius:8px;padding:12px 10px 8px;margin-top:4px;display:flex;flex-direction:column;align-items:center;gap:6px">
+        ${svg}
+        <div style="font-size:11px;font-weight:600;letter-spacing:2.5px;color:#111">${escHtml(code)}</div>
+      </div>` : ''}
+      <div class="scan-result-actions">
+        <button class="scan-use-btn" onclick="loadScannedToGenerator()">Edytuj w generatorze</button>
+        <button class="scan-again-btn" onclick="clearScanResult()">Skanuj kolejny</button>
+      </div>
+    </div>`;
+  showToast('✓ Zeskanowano i zapisano');
+  setTimeout(() => {
+    document.getElementById('scan-result-area').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, 100);
+}
+
+function clearScanResult() {
+  document.getElementById('scan-result-area').innerHTML = '';
+  lastScanned = null;
+  scanCooldown = false;
+}
+
+function loadScannedToGenerator() {
+  if (!lastScanned) return;
+  document.getElementById('input-code').value = lastScanned.code;
+  document.getElementById('input-operator').value = lastScanned.operator || '';
+  stopScanner();
+  switchTab('gen');
+  generateBarcode();
+  lastScanned = null;
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && scannerActive) stopScanner();
+});
+
+// Swipe down to close modal
+let touchStartY = 0;
+document.getElementById('modal').addEventListener('touchstart', e => {
+  touchStartY = e.touches[0].clientY;
+}, { passive: true });
+document.getElementById('modal').addEventListener('touchend', e => {
+  const dy = e.changedTouches[0].clientY - touchStartY;
+  if (dy > 80) {
+    document.getElementById('modal').classList.remove('open');
+    document.body.style.overflow = '';
+    modalItem = null;
+  }
+}, { passive: true });
+
+// ═══════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('hist-count').textContent = history.length;
+  document.getElementById('sort-label').textContent = sortMode === 'date' ? 'Data' : 'A-Z';
+  if (sortMode === 'alpha') document.getElementById('sort-btn').classList.add('active');
+
+  // Empty state for generator
+  document.getElementById('barcode-output').innerHTML = `
+    <div class="empty-barcode">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <rect x="2" y="4" width="3" height="16" rx="0.5"/>
+        <rect x="7" y="4" width="1.5" height="16" rx="0.5"/>
+        <rect x="10.5" y="4" width="3" height="16" rx="0.5"/>
+        <rect x="15.5" y="4" width="1.5" height="16" rx="0.5"/>
+        <rect x="19" y="4" width="3" height="16" rx="0.5"/>
+      </svg>
+      <p>Wpisz kod i kliknij „Generuj"<br>aby zobaczyć kod kreskowy Code 39</p>
+    </div>
+  `;
+});
+</script>
+</body>
+</html>
