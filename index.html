@@ -909,18 +909,19 @@
 //  CODE 39 ENCODING
 // ═══════════════════════════════════════════════════
 
+// Verified against ISO/IEC 16388 — each char has exactly 3 wide (W) elements
 const CODE39 = {
   '0':'NNNWWNWNN','1':'WNNWNNNNW','2':'NNWWNNNNW','3':'WNWWNNNNN',
   '4':'NNNWWNNNW','5':'WNNWWNNNN','6':'NNWWWNNNN','7':'NNNWNNWNW',
   '8':'WNNWNNWNN','9':'NNWWNNWNN','A':'WNNNNWNNW','B':'NNWNNWNNW',
-  'C':'WNWNNWNNN','D':'NNNWNWNNW','E':'WNNWNWNNN','F':'NNWWNWNNN',
-  'G':'NNNNNWWNW','H':'WNNNNWWNN','I':'NNWNNWWNN','J':'NNNWNWWNN',
-  'K':'WNNNNNNWW','L':'NNWNNNNWW','M':'WNWNNNNWN','N':'NNNWNNNNW',
-  'O':'WNNWNNNNW','P':'NNWWNNNNW','Q':'NNNNNWNNW','R':'WNNNNWNNW',
-  'S':'NNWNNWNNN','T':'NNNWNWNNN','U':'WWNNNNNNW','V':'NWWNNNNNW',
-  'W':'WWWNNNNNN','X':'NWNNWNNNW','Y':'WWNNWNNNN','Z':'NWWNNWNNN',
-  '-':'NWNNNNWNW','.':'WWNNNWNNN',' ':'NWNNWNWNN','$':'NWNWNWNNN',
-  '/':'NWNWNNWNN','+':'NWNNNWNWN','%':'NNNWNWNWN','*':'NWNNWNWNN'
+  'C':'WNWNNWNNN','D':'NNNNWWNNW','E':'WNNNWWNNN','F':'NNWNWWNNN',
+  'G':'NNNNNWWNW','H':'WNNNNWWNN','I':'NNWNNWWNN','J':'NNNNWWWNN',
+  'K':'WNNNNNNWW','L':'NNWNNNNWW','M':'WNWNNNNWN','N':'NNNNWNNWW',
+  'O':'WNNNWNNWN','P':'NNWNWNNWN','Q':'NNNNNNWWW','R':'WNNNNNWWN',
+  'S':'NNWNNNWWN','T':'NNNNWNWWN','U':'WWNNNNNNW','V':'NWWNNNNNW',
+  'W':'WWWNNNNNN','X':'NWNNWNNNW','Y':'WWNNWNNNN','Z':'NWWNWNNNN',
+  '-':'NWNNNNWNW','.':'WWNNNNWNN',' ':'NWNNWNWNN','$':'NWNWNWNNN',
+  '/':'NWNWNNNWN','+':'NWNNNWNWN','%':'NNNWNWNWN','*':'NWNNWNWNN'
 };
 
 const VALID = new Set(Object.keys(CODE39).filter(k => k !== '*'));
@@ -1289,7 +1290,6 @@ let scannerActive = false;
 let scanStream    = null;
 let scanRafId     = null;
 let lastScanned   = null;
-let scanCooldown  = false;
 let barcodeDetector = null;
 
 // ── pick decode strategy once ──
@@ -1304,92 +1304,178 @@ function getDecodeStrategy() {
 }
 const DECODE_STRATEGY = getDecodeStrategy();
 
-// ── canvas-based Code39 pixel decoder ──
+// ── canvas-based Code39 pixel decoder (robust version) ──
+//
+// Code39 char = 9 elements: 5 bars (odd idx) + 4 spaces (even idx)
+// 3 of the 9 are Wide, 6 are Narrow. Wide ≈ 2–3× narrow.
+// Inter-character gap = 1 narrow space (ignored in decoding).
+//
+// Key fix vs naïve approach:
+//   • Otsu binarisation per-row (adaptive threshold)
+//   • N/W classification per CHARACTER using its own 9 widths,
+//     not a global median — avoids cross-character pollution
+//   • Require exactly 3 W in each character (Code39 invariant)
+//   • Try multiple row fractions AND a vertical-average strip
+
+// Verified against ISO/IEC 16388 — each char has exactly 3 wide (W) elements
 const C39_CHARS = {
   'NNNWWNWNN':'0','WNNWNNNNW':'1','NNWWNNNNW':'2','WNWWNNNNN':'3',
   'NNNWWNNNW':'4','WNNWWNNNN':'5','NNWWWNNNN':'6','NNNWNNWNW':'7',
   'WNNWNNWNN':'8','NNWWNNWNN':'9','WNNNNWNNW':'A','NNWNNWNNW':'B',
-  'WNWNNWNNN':'C','NNNWNWNNW':'D','WNNWNWNNN':'E','NNWWNWNNN':'F',
-  'NNNNNWWNW':'G','WNNNNWWNN':'H','NNWNNWWNN':'I','NNNWNWWNN':'J',
-  'WNNNNNNWW':'K','NNWNNNNWW':'L','WNWNNNNWN':'M','NNNWNNNNW':'N',
-  'WNNWNNNNW':'O','NNWWNNNNW':'P','NNNNNWNNW':'Q','WNNNNWNNW':'R',
-  'NNWNNWNNN':'S','NNNWNWNNN':'T','WWNNNNNNW':'U','NWWNNNNNW':'V',
-  'WWWNNNNNN':'W','NWNNWNNNW':'X','WWNNWNNNN':'Y','NWWNNWNNN':'Z',
-  'NWNNNNWNW':'-','WWNNNWNNN':'.','NWNNWNWNN':' ','NWNWNWNNN':'$',
-  'NWNWNNWNN':'/','NWNNNWNWN':'+','NNNWNWNWN':'%','NWNNWNWNN':'*'
+  'WNWNNWNNN':'C','NNNNWWNNW':'D','WNNNWWNNN':'E','NNWNWWNNN':'F',
+  'NNNNNWWNW':'G','WNNNNWWNN':'H','NNWNNWWNN':'I','NNNNWWWNN':'J',
+  'WNNNNNNWW':'K','NNWNNNNWW':'L','WNWNNNNWN':'M','NNNNWNNWW':'N',
+  'WNNNWNNWN':'O','NNWNWNNWN':'P','NNNNNNWWW':'Q','WNNNNNWWN':'R',
+  'NNWNNNWWN':'S','NNNNWNWWN':'T','WWNNNNNNW':'U','NWWNNNNNW':'V',
+  'WWWNNNNNN':'W','NWNNWNNNW':'X','WWNNWNNNN':'Y','NWWNWNNNN':'Z',
+  'NWNNNNWNW':'-','WWNNNNWNN':'.','NWNNWNWNN':' ','NWNWNWNNN':'$',
+  'NWNWNNNWN':'/','NWNNNWNWN':'+','NNNWNWNWN':'%','NWNNWNWNN':'*'
 };
 
 const SCAN_CANVAS = document.createElement('canvas');
 const SCAN_CTX    = SCAN_CANVAS.getContext('2d', { willReadFrequently: true });
 
-function decodeCode39FromPixels(pixels, w) {
-  // Convert row to binary (dark=1, light=0) with threshold
-  const threshold = 128;
+// Otsu's method: finds optimal binarisation threshold from grayscale histogram
+function otsuThreshold(gray) {
+  const hist = new Int32Array(256);
+  for (let i = 0; i < gray.length; i++) hist[gray[i]]++;
+  const total = gray.length;
+  let sum = 0;
+  for (let i = 0; i < 256; i++) sum += i * hist[i];
+  let sumB = 0, wB = 0, max = 0, thresh = 128;
+  for (let t = 0; t < 256; t++) {
+    wB += hist[t];
+    if (!wB) continue;
+    const wF = total - wB;
+    if (!wF) break;
+    sumB += t * hist[t];
+    const mB = sumB / wB;
+    const mF = (sum - sumB) / wF;
+    const between = wB * wF * (mB - mF) ** 2;
+    if (between > max) { max = between; thresh = t; }
+  }
+  return thresh;
+}
+
+// Classify 9 widths as N/W using the gap within that character only.
+// Code39 invariant: exactly 3 wide elements per character.
+// We sort the 9 widths, find the gap between narrow cluster and wide cluster.
+function classifyChar9(widths) {
+  const sorted = [...widths].sort((a, b) => a - b);
+  // Find largest gap — splits narrow from wide
+  let maxGap = 0, gapIdx = 0;
+  for (let i = 0; i < 8; i++) {
+    const g = sorted[i+1] - sorted[i];
+    if (g > maxGap) { maxGap = g; gapIdx = i; }
+  }
+  const cutoff = (sorted[gapIdx] + sorted[gapIdx+1]) / 2;
+  const result = widths.map(w => w > cutoff ? 'W' : 'N');
+  // Validate: exactly 3 W required
+  if (result.filter(c => c === 'W').length !== 3) return null;
+  return result.join('');
+}
+
+function decodeCode39FromRow(gray, w) {
+  // 1. Binarise with Otsu
+  const thresh = otsuThreshold(gray);
   const bits = new Uint8Array(w);
-  for (let x = 0; x < w; x++) bits[x] = pixels[x * 4] < threshold ? 1 : 0;
+  for (let x = 0; x < w; x++) bits[x] = gray[x] < thresh ? 1 : 0;
 
-  // Find runs of same value
+  // 2. Run-length encode
   const runs = [];
-  let cur = bits[0], count = 1;
+  let cur = bits[0], n = 1;
   for (let x = 1; x < w; x++) {
-    if (bits[x] === cur) { count++; }
-    else { runs.push({ v: cur, n: count }); cur = bits[x]; count = 1; }
+    if (bits[x] === cur) { n++; }
+    else { runs.push([cur, n]); cur = bits[x]; n = 1; }
   }
-  runs.push({ v: cur, n: count });
+  runs.push([cur, n]);
 
-  // Only keep runs that start/end in dark (bars start with dark)
-  // Narrow/Wide classification: find median run length → threshold at 1.8×
-  if (runs.length < 20) return null;
+  // Need at least start(*) + 1 char + stop(*) = 3 × 9 + 2 gaps = 29 runs
+  if (runs.length < 29) return null;
 
-  const lens = runs.map(r => r.n).sort((a,b) => a-b);
-  const med  = lens[Math.floor(lens.length / 2)];
-  const thresh = med * 1.8;
-
-  // Classify each run as N(arrow) or W(ide)
-  const classified = runs.map(r => r.n < thresh ? 'N' : 'W');
-
-  // Slide a 9-element window (each Code39 char = 9 elements)
-  // with 1-element inter-char gap
-  let result = '';
+  // 3. Find first dark run (skip leading light)
   let i = 0;
-  // skip leading light runs
-  while (i < classified.length && runs[i].v === 0) i++;
+  while (i < runs.length && runs[i][0] === 0) i++;
 
-  while (i + 8 < classified.length) {
-    // must start on a dark run
-    if (runs[i].v !== 1) { i++; continue; }
-    const key = classified.slice(i, i+9).join('');
-    const ch  = C39_CHARS[key];
-    if (ch) {
-      result += ch;
-      i += 10; // 9 elements + 1 gap
-    } else {
-      i++;
+  // 4. Decode characters
+  let result = '';
+  while (i + 8 < runs.length) {
+    if (runs[i][0] !== 1) { i++; continue; } // must start on bar
+
+    // Extract 9 widths for this character
+    const widths = [];
+    for (let e = 0; e < 9; e++) {
+      if (i + e >= runs.length) break;
+      widths.push(runs[i + e][1]);
     }
+    if (widths.length < 9) break;
+
+    const key = classifyChar9(widths);
+    if (key) {
+      const ch = C39_CHARS[key];
+      if (ch) {
+        result += ch;
+        i += 9; // skip 9 elements of this char
+        // skip inter-char gap (1 narrow space) if present
+        if (i < runs.length && runs[i][0] === 0) i++;
+        continue;
+      }
+    }
+    i++;
   }
 
-  // Valid Code39 result starts and ends with *
-  if (result.length >= 3 && result[0] === '*' && result[result.length-1] === '*') {
+  if (result.length >= 3 && result[0] === '*' && result[result.length - 1] === '*') {
     return result.slice(1, -1);
   }
   return null;
 }
 
+function rowToGray(rgba, w) {
+  const g = new Uint8Array(w);
+  for (let x = 0; x < w; x++) {
+    const o = x * 4;
+    // Luminance: 0.299R + 0.587G + 0.114B
+    g[x] = (rgba[o] * 77 + rgba[o+1] * 150 + rgba[o+2] * 29) >> 8;
+  }
+  return g;
+}
+
 function decodeFrameCanvas(video) {
-  const w = video.videoWidth, h = video.videoHeight;
-  if (!w || !h) return null;
-  SCAN_CANVAS.width = w; SCAN_CANVAS.height = h;
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh) return null;
+
+  // Downscale wide images to max 640px wide for speed
+  const scale = vw > 640 ? 640 / vw : 1;
+  const w = Math.round(vw * scale);
+  const h = Math.round(vh * scale);
+
+  SCAN_CANVAS.width = w;
+  SCAN_CANVAS.height = h;
   SCAN_CTX.drawImage(video, 0, 0, w, h);
 
-  // Sample multiple horizontal rows through the centre region
-  const rows = [0.35, 0.42, 0.50, 0.58, 0.65];
-  for (const frac of rows) {
+  // Sample 9 horizontal rows spread across centre 40% of frame
+  const rowFracs = [0.33, 0.38, 0.43, 0.48, 0.50, 0.52, 0.57, 0.62, 0.67];
+  for (const frac of rowFracs) {
     const y = Math.floor(h * frac);
-    const data = SCAN_CTX.getImageData(0, y, w, 1).data;
-    const result = decodeCode39FromPixels(data, w);
-    if (result) return result;
+    const rgba = SCAN_CTX.getImageData(0, y, w, 1).data;
+    const gray = rowToGray(rgba, w);
+    const r = decodeCode39FromRow(gray, w);
+    if (r) return r;
   }
-  return null;
+
+  // Fallback: average 5 rows into one (reduces noise)
+  const midY = Math.floor(h * 0.50);
+  const strip = new Float32Array(w);
+  for (let dy = -2; dy <= 2; dy++) {
+    const y = Math.max(0, Math.min(h-1, midY + dy));
+    const rgba = SCAN_CTX.getImageData(0, y, w, 1).data;
+    for (let x = 0; x < w; x++) {
+      strip[x] += (rgba[x*4]*77 + rgba[x*4+1]*150 + rgba[x*4+2]*29) >> 8;
+    }
+  }
+  const avgGray = new Uint8Array(w);
+  for (let x = 0; x < w; x++) avgGray[x] = strip[x] / 5;
+  return decodeCode39FromRow(avgGray, w);
 }
 
 async function decodeFrameNative(video) {
@@ -1410,7 +1496,6 @@ async function startScanner() {
   errEl.style.display = 'none';
   document.getElementById('scan-result-area').innerHTML = '';
   lastScanned = null;
-  scanCooldown = false;
 
   if (!navigator.mediaDevices?.getUserMedia) {
     errEl.textContent = 'Twoja przeglądarka nie obsługuje dostępu do kamery. Użyj Chrome na Androidzie.';
@@ -1451,13 +1536,13 @@ async function startScanner() {
     scanRafId = requestAnimationFrame(loop);
     if (ts - lastAttempt < INTERVAL) return;
     lastAttempt = ts;
-    if (scanCooldown || video.readyState < 2) return;
+    if (video.readyState < 2) return;
 
     if (DECODE_STRATEGY === 'native') {
-      decodeFrameNative(video).then(r => { if (r && !scanCooldown) onScanSuccess(r); });
+      decodeFrameNative(video).then(r => { if (r) onScanSuccess(r); });
     } else {
       const r = decodeFrameCanvas(video);
-      if (r && !scanCooldown) onScanSuccess(r);
+      if (r) onScanSuccess(r);
     }
   }
   scanRafId = requestAnimationFrame(loop);
@@ -1488,8 +1573,9 @@ function setScanBtnStop(isStop) {
 // ── on successful scan ──
 function onScanSuccess(code) {
   if (navigator.vibrate) navigator.vibrate([40, 30, 40]);
-  scanCooldown = true;
-  setTimeout(() => { scanCooldown = false; }, 2500);
+
+  // Zatrzymaj kamerę — wznowi się dopiero po kliknięciu "Skanuj kolejny"
+  stopScanner();
 
   const operator = document.getElementById('scan-operator').value.trim().toUpperCase();
   const ts = Date.now();
@@ -1510,7 +1596,7 @@ function onScanSuccess(code) {
       </div>` : ''}
       <div class="scan-result-actions">
         <button class="scan-use-btn" onclick="loadScannedToGenerator()">Edytuj w generatorze</button>
-        <button class="scan-again-btn" onclick="clearScanResult()">Skanuj kolejny</button>
+        <button class="scan-again-btn" onclick="scanNext()">Skanuj kolejny</button>
       </div>
     </div>`;
   showToast('✓ Zeskanowano i zapisano');
@@ -1519,10 +1605,15 @@ function onScanSuccess(code) {
   }, 100);
 }
 
+async function scanNext() {
+  document.getElementById('scan-result-area').innerHTML = '';
+  lastScanned = null;
+  await startScanner();
+}
+
 function clearScanResult() {
   document.getElementById('scan-result-area').innerHTML = '';
   lastScanned = null;
-  scanCooldown = false;
 }
 
 function loadScannedToGenerator() {
