@@ -470,7 +470,7 @@
     gap: 6px;
   }
   .modal-date svg { width: 13px; height: 13px; }
-  .modal-actions { display: flex; gap: 8px; }
+  .modal-actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .modal-use-btn {
     flex: 1;
     background: var(--accent);
@@ -485,12 +485,32 @@
     transition: all 0.12s;
   }
   .modal-use-btn:active { background: var(--accent2); }
+  .modal-print-btn {
+    flex: 1;
+    background: var(--input);
+    color: var(--text);
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 13px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.12s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+  }
+  .modal-print-btn:active { border-color: var(--accent); color: var(--accent); }
+  .modal-print-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
   .modal-del-btn {
+    width: 100%;
     background: rgba(255,79,107,0.1);
     color: var(--danger);
     border: 1.5px solid rgba(255,79,107,0.3);
     border-radius: 12px;
-    padding: 13px 16px;
+    padding: 12px 16px;
     font-size: 14px;
     font-weight: 700;
     cursor: pointer;
@@ -498,6 +518,20 @@
     transition: all 0.12s;
   }
   .modal-del-btn:active { background: rgba(255,79,107,0.2); }
+
+  /* ── PRINT STYLES — only active during window.print() ── */
+  @media print {
+    * { margin: 0 !important; padding: 0 !important; box-sizing: border-box !important; }
+    body, html { background: #fff !important; }
+    body > *:not(#print-frame) { display: none !important; }
+    #print-frame {
+      display: block !important;
+      position: fixed !important;
+      inset: 0 !important;
+      background: #fff !important;
+      z-index: 99999 !important;
+    }
+  }
 
   /* ── TOAST ── */
   .toast {
@@ -896,10 +930,21 @@
     </div>
     <div class="modal-actions">
       <button class="modal-use-btn" onclick="loadToGenerator()">Użyj w generatorze</button>
+      <button class="modal-print-btn" onclick="printLabel()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 6 2 18 2 18 9"/>
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+          <rect x="6" y="14" width="12" height="8"/>
+        </svg>
+        Drukuj etykietę
+      </button>
       <button class="modal-del-btn" onclick="deleteFromModal()">Usuń</button>
     </div>
   </div>
 </div>
+
+<!-- Hidden print frame — rendered only during print() -->
+<div id="print-frame" style="display:none"></div>
 
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
@@ -1266,6 +1311,148 @@ function deleteFromModal() {
   document.getElementById('modal').classList.remove('open');
   document.body.style.overflow = '';
   modalItem = null;
+}
+
+// ═══════════════════════════════════════════════════
+//  PRINT LABEL  —  75mm × 35mm business-card label
+// ═══════════════════════════════════════════════════
+
+function printLabel() {
+  if (!modalItem) return;
+
+  const { code, operator, ts } = modalItem;
+
+  // Barcode SVG: 68mm wide × 14mm tall (in px at 96dpi: 257×53)
+  const barSvg = buildBarcodeSVG(code, 257, 53);
+
+  const labelHTML = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  /* A4 page, default margins removed */
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 210mm;
+    height: 297mm;
+    background: #fff;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+
+  /* Full A4 sheet — label floats in the centre */
+  .page {
+    width: 210mm;
+    height: 297mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* The physical label: 75mm × 35mm */
+  .card {
+    width: 75mm;
+    height: 35mm;
+    display: flex;
+    flex-direction: column;
+    border: 0.4mm solid #bbb;
+    border-radius: 1.2mm;
+    overflow: hidden;
+  }
+
+  /* RED HEADER */
+  .header {
+    background: #CC1414;
+    color: #fff;
+    text-align: center;
+    padding: 1mm 0;
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 0.8pt;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+
+  /* CONTENT */
+  .body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1mm 2.5mm 1.5mm;
+    gap: 1mm;
+  }
+
+  /* Operator line — only shown when operator exists */
+  .operator-line {
+    font-size: 7.5pt;
+    font-weight: 700;
+    color: #111;
+    letter-spacing: 0.4pt;
+    text-align: center;
+  }
+
+  /* Barcode block */
+  .bc-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3mm;
+    width: 100%;
+  }
+  .bc-wrap svg {
+    width: 68mm;
+    height: 14mm;
+    display: block;
+  }
+  .bc-text {
+    font-size: 5.5pt;
+    letter-spacing: 2.5pt;
+    color: #111;
+    font-weight: 600;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="card">
+
+    <div class="header">Kontrola Końcowa</div>
+
+    <div class="body">
+      ${operator ? `<div class="operator-line">${escHtml(operator)}</div>` : ''}
+      <div class="bc-wrap">
+        ${barSvg || ''}
+        <div class="bc-text">${escHtml(code)}</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+<script>
+  window.onload = function() {
+    window.print();
+    window.onafterprint = function() { window.close(); };
+    setTimeout(function() { window.close(); }, 3000);
+  };
+<\/script>
+</body>
+</html>`;
+
+  const popup = window.open('', '_blank',
+    'width=600,height=400,toolbar=0,scrollbars=0,status=0,menubar=0,location=0');
+  if (!popup) {
+    showToast('Zablokowano popup — zezwól na wyskakujące okna dla tej strony');
+    return;
+  }
+  popup.document.open();
+  popup.document.write(labelHTML);
+  popup.document.close();
 }
 
 // ═══════════════════════════════════════════════════
